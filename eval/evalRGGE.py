@@ -59,56 +59,30 @@ def average_precision(eval_true, eval_pred):
 @torch.no_grad()
 def valid(model, DG_valid_pos, DG_valid_neg, DE_valid_pos, DE_valid_neg, args):
     model.eval()
-    raw_loss = 0.0
-    losses = {'loss0': [], 'loss1': [], 'loss2': [], 'loss3': []}
     type_matrix = util.get_adj_matrix().to(model.A.device)
     valid_edges = torch.cat([DG_valid_pos, DG_valid_neg, DE_valid_pos, DE_valid_neg]).to(model.A.device)
     entity, R = model(DG_valid_pos, DE_valid_pos)
     disScore = model.distmult(entity, valid_edges, type_matrix[valid_edges[:, 0], valid_edges[:, 1]].to(model.A.device))
-    # criterion = torch.nn.BCEWithLogitsLoss()
     DG_true = torch.cat([torch.ones(DG_valid_pos.shape[0], dtype=torch.int), torch.zeros(DG_valid_neg.shape[0], dtype=torch.int)]).to(model.A.device)
-    # disLossDG = criterion(disScore[:len(DG_true)], DG_true.float())  # 计算DG这种正边和负边的损失
     DE_true = torch.cat([torch.ones(DE_valid_pos.shape[0], dtype=torch.int), torch.zeros(DE_valid_neg.shape[0], dtype=torch.int)]).to(model.A.device)
-    # disLossDE = criterion(disScore[len(DG_true):], DE_true.float())  # 计算DE这种正边和负边的损失
-    # disLossDG = util.n_pair_loss(disScore[:len(DG_valid_pos)], disScore[len(DG_valid_pos):len(DG_true)])
     pos_weight_dg = torch.tensor([len(DG_valid_neg) / len(DG_valid_pos)], device=model.A.device)
     pos_weight_de = torch.tensor([len(DE_valid_neg) / len(DE_valid_pos)], device=model.A.device)
     criterion_dg = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight_dg)
     criterion_de = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight_de)
 
-    # 假设 disScore 是 DistMult 输出的原始 logits
     disLossDG = criterion_dg(disScore[:len(DG_true)], DG_true.float())
     disLossDE = criterion_de(disScore[len(DG_true):], DE_true.float())
-    # disLossDE = util.n_pair_loss(disScore[len(DG_true):len(DG_true) + len(DE_valid_pos)],
-    #                              disScore[len(DG_true) + len(DE_valid_pos):])
-    npLossDG, npLossDE = None, None
-    if args.loss == 'NP':
-        npLossDG = util.n_pair_loss(R[tuple(DG_valid_pos.t())], R[tuple(DG_valid_neg.t())])
-        npLossDE = util.n_pair_loss(R[tuple(DE_valid_pos.t())], R[tuple(DE_valid_neg.t())])
-    elif args.loss == 'CE':
-        disScore = R[tuple(valid_edges.t())]
-        npLossDG = criterion_dg(disScore[:len(DG_true)], DG_true.float())
-        npLossDE = criterion_de(disScore[len(DG_true):], DE_true.float())
-    # print(disLossDG, disLossDE, npLossDG, npLossDE)
+    npLossDG = util.n_pair_loss(R[tuple(DG_valid_pos.t())], R[tuple(DG_valid_neg.t())])
+    npLossDE = util.n_pair_loss(R[tuple(DE_valid_pos.t())], R[tuple(DE_valid_neg.t())])
     w1, w2, w3, w4 = args.loss_weights
-    # loss = ((1 / (2 * w1 ** 2)) * disLossDG + (1 / (2 * w2 ** 2)) * disLossDE + (1 / (2*w3 ** 2)) * npLossDG + (1 / (2*w4 ** 2)) * npLossDE + torch.log(w1) + torch.log(w2) + torch.log(w3) + torch.log(w4))
     loss = torch.exp(-w1) * disLossDG + torch.exp(-w2) * disLossDE + torch.exp(-w3) * npLossDG + torch.exp(-w4) * npLossDE + w1 + w2 + w3 + w4
-    # loss = disLossDG + disLossDE + npLossDG + npLossDE
-    raw_loss += (disLossDG + disLossDE + npLossDG + npLossDE)
-    # valid_pred = R[tuple(valid_edges.t())]
-    # valid_true = torch.cat([DG_true, DE_true])
-    # pk = precision_at_k(valid_true, valid_pred, valid_true.sum().item())
+
     ap0 = average_precision(DG_true.detach().cpu(), R[tuple(torch.cat([DG_valid_pos, DG_valid_neg]).t())].detach().cpu())
     ap1 = average_precision(DE_true.detach().cpu(), R[tuple(torch.cat([DE_valid_pos, DE_valid_neg]).t())].detach().cpu())
-    losses['loss0'].append(disLossDG.item())
-    losses['loss1'].append(disLossDE.item())
-    losses['loss2'].append(npLossDG.item())
-    losses['loss3'].append(npLossDE.item())
-
     pk0 = precision_at_k(DG_true.detach().cpu(), R[tuple(torch.cat([DG_valid_pos, DG_valid_neg]).t())].detach().cpu(), DG_true.sum().item())
     pk1 = precision_at_k(DE_true.detach().cpu(), R[tuple(torch.cat([DE_valid_pos, DE_valid_neg]).t())].detach().cpu(), DE_true.sum().item())
 
-    return loss.item(), (ap0+ap1)/2, losses, pk0, pk1, raw_loss.item()
+    return loss.item(), (ap0+ap1)/2, (pk0+pk1)/2
 
 
 @torch.no_grad()
@@ -129,11 +103,11 @@ def test(model, DG_test_pos, DG_test_neg, DE_test_pos, DE_test_neg, args, log_fi
     DG_pred_binary = (DG_pred > 0.5).int()
     num_DG_edges = DG_true.sum().item()
     # save predicted score and true label of DG test
-    # results_df = pd.DataFrame({
-    #     'true_label': DG_true,
-    #     'predict': DG_pred,
-    # })
-    # results_df.to_csv(os.path.join(args.result_fold, f'fold{args.fold}DG.csv'), index=False)
+    results_df = pd.DataFrame({
+        'true_label': DG_true,
+        'predict': DG_pred,
+    })
+    results_df.to_csv(os.path.join(args.result_fold, f'fold{args.fold}DG.csv'), index=False)
     auc = roc_auc_score(DG_true, DG_pred)
     ap = average_precision(DG_true, DG_pred)
     dg_precision = precision_score(DG_true, DG_pred_binary)
