@@ -61,6 +61,14 @@ All implementations of RGGE-DTD are based on PyTorch and PyTorch Geometric. RGGE
 523
 ```
 
+## Runtime complexity
+
+| RGCN               | Gelato | RGGE               |
+| ------------------ | ------ | ------------------ |
+| O(∣V∣⋅d^2+\|E\|⋅d) | O(d^2) | *O*(∣V∣⋅d^2+∣E∣⋅d) |
+
+∣V∣ is the total number of nodes, ∣E∣ is the total number of edges across all relation types, and d*d* is the hidden embedding dimension.
+
 # Run RGGE-DTD
 
 Obtain the preprocessing file and execute the following command.
