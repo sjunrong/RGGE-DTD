@@ -1,4 +1,4 @@
-# **A Unified Model for Simultaneous Prediction of Drug-Target Interactions and Drug-Disease Associations in Drug Repositioning**
+# RGGE-DTD: A Unified Model for Simultaneous Prediction of Drug-Target Interactions and Drug-Disease Associations in Drug Repositioning
 
 RGGE-DTD is a model based on RGCN and Gelato for predicting novel DTIs and DDAs.
 
@@ -63,7 +63,7 @@ All implementations of RGGE-DTD are based on PyTorch and PyTorch Geometric. RGGE
 
 ## Runtime complexity
 
-| RGCN               | Gelato | RGGE               |
+| RGCN               | Gelato | RGGE-DTD           |
 | ------------------ | ------ | ------------------ |
 | O(∣V∣⋅d^2+\|E\|⋅d) | O(d^2) | *O*(∣V∣⋅d^2+∣E∣⋅d) |
 
